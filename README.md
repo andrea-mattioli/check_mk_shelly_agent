@@ -4,7 +4,7 @@ Custom Plugin for check_mk to monitoring shelly devices
 Install:
 
 ```
-OMD[mattiols]:~$ wget -o shelly_status-1.0.mkp https://github.com/andrea-mattioli/check_mk_shelly_agent/...
+OMD[mattiols]:~$ wget -o shelly_status-1.0.mkp https://github.com/andrea-mattioli/check_mk_shelly_agent/raw/main/shelly_status-1.0.mkp
 OMD[mattiols]:~$ mkp install shelly_status-1.0.mkp
 ```
 Example:
