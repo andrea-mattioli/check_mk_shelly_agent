@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+# +------------------------------------------------------------------+
+# |             ____ _               _        __  __ _  __           |
+# |            / ___| |__   ___  ___| | __   |  \/  | |/ /           |
+# |           | |   | '_ \ / _ \/ __| |/ /   | |\/| | ' /            |
+# |           | |___| | | |  __/ (__|   <    | |  | | . \            |
+# |            \____|_| |_|\___|\___|_|\_\___|_|  |_|_|\_\           |
+# |                                                                  |
+# | Copyright Mathias Kettner 2014             mk@mathias-kettner.de |
+# +------------------------------------------------------------------+
+#
+# This file is part of Check_MK.
+# The official homepage is at http://mathias-kettner.de/check_mk.
+#
+# check_mk is free software;  you can redistribute it and/or modify it
+# under the  terms of the  GNU General Public License  as published by
+# the Free Software Foundation in version 2.  check_mk is  distributed
+# in the hope that it will be useful, but WITHOUT ANY WARRANTY;  with-
+# out even the implied warranty of  MERCHANTABILITY  or  FITNESS FOR A
+# PARTICULAR PURPOSE. See the  GNU General Public License for more de-
+# tails. You should have  received  a copy of the  GNU  General Public
+# License along with GNU Make; see the file  COPYING.  If  not,  write
+# to the Free Software Foundation, Inc., 51 Franklin St,  Fifth Floor,
+# Boston, MA 02110-1301 USA.
+#
+# file: agent_shelly_status
+#
+# created: 11/2021
+#
+# Author: Andrea Mattioli
+# email: andrea.mattiols@gmail.com
+#
+# purpose: 
+# This script monitoring shelly. 
+
+# sample agent output #
+#<<<shelly_status>>>
+#NAME : cucina
+#Wifi_Power : -65
+#Ipv4_Method : static
+#UpToDate : False
+#Ram_Total : 50872
+#Ram_Free : 39420
+#Ram_Used : 11452
+#Fs_Size : 233681
+#Fs_Free : 150098
+#Fs_Used : 83583
+#Uptime : 262293
+#from typing import Optional, Sequence
+
+import getopt
+import sys
+from requests.auth import HTTPBasicAuth
+import getopt
+import sys
+import requests
+from requests.auth import HTTPBasicAuth
+import datetime
+
+intervals = (
+    ('weeks', 604800),  # 60 * 60 * 24 * 7
+    ('days', 86400),    # 60 * 60 * 24
+    ('hours', 3600),    # 60 * 60
+    ('minutes', 60),
+    ('seconds', 1),
+)
+
+def display_time(seconds, granularity=5):
+    result = []
+
+    for name, count in intervals:
+        value = seconds // count
+        if value:
+            seconds -= value * count
+            if value == 1:
+                name = name.rstrip('s')
+            result.append("{} {}".format(value, name))
+    return ' '.join(result[:granularity])
+
+def usage():
+    sys.stderr.write("""Check_MK Shelly Agent
+
+USAGE: agent_shelly_status -u [username] -p [password] -n hostname HOST
+       agent_shelly_status -h
+
+ARGUMENTS:
+  HOST           Host name or IP address of the Shelly
+  
+
+OPTIONS:
+  -h, --help                Show this help message and exit
+  -u, --username            Sets the username
+  -p, --password            Sets the password
+  -n  --name                Sets the hostname
+  --debug                   Debug mode: let Python exceptions come through
+""")
+
+
+short_options = 'hu:p:n:'
+long_options = [
+    'help', 'username=', 'password=', 'name', 'debug'
+               ]
+
+try:
+    opts, args = getopt.getopt(sys.argv[1:], short_options, long_options)
+
+except getopt.GetoptError as err:
+    sys.stderr.write("%s\n" % err)
+    sys.exit(1)
+
+opt_debug = False
+opt_username = ""
+opt_password = ""
+opt_name = ""
+
+
+for opt, arg in opts:
+    if opt in ['--debug']:
+        opt_debug = True
+    elif opt in ['-u', '--username']:
+        opt_username = arg
+    elif opt in ['-p', '--password']:
+        opt_password = arg
+    elif opt in ['-n', '--name']:
+        opt_name = arg
+    elif opt in ['-h', '--help']:
+        usage()
+        sys.exit(0)
+
+if len(args) == 1:
+    host_address = args[0]
+elif not args:
+    sys.stderr.write("ERROR: No host given.\n")
+    sys.exit(1)
+else:
+    sys.stderr.write("ERROR: Please specify exactly one host.\n")
+    sys.exit(1)
+
+SHELLY_STATUS = "http://%s/status" % host_address
+SHELLY_SETTINGS = "http://%s/settings" % host_address
+
+with requests.Session() as session:
+    get1 = session.get(SHELLY_STATUS, verify=False,
+                        auth=HTTPBasicAuth(opt_username, opt_password))
+
+with requests.Session() as session:
+    get2 = session.get(SHELLY_SETTINGS, verify=False,
+                        auth=HTTPBasicAuth(opt_username, opt_password))
+
+data1 = get1.json()
+data2 = get2.json()
+
+print("<<<shelly_status>>>")
+if len(opt_name) > 0:
+    print("NAME : %s" % (opt_name))
+print("Wifi_Power : %s" % (data1['wifi_sta']['rssi']))
+print("Ipv4_Method : %s" % (data2['wifi_sta']['ipv4_method']))
+print("UpToDate : %s" % (data1['update']['has_update']))
+print("Ram_Used : %s" % (round((int(data1['ram_total'] - data1['ram_free'])*100/data1['ram_total']), 2)))
+print("Fs_Used : %s" % (round((int(data1['fs_size'] - data1['fs_free'])*100/data1['fs_size']), 2)))
+print("Uptime : %s" % int(data1['uptime']))
